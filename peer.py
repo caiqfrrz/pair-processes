@@ -1,4 +1,3 @@
-
 import Pyro5.api
 import Pyro5.server
 import Pyro5.nameserver
@@ -23,7 +22,7 @@ class Peer(object):
         self.timestamp = None
         self.clock = 0
 
-        self.max_cs_time = 10
+        self.max_cs_time = 12
         self.cs_timer = None
 
         self.heartbeat_interval = 2
@@ -130,6 +129,7 @@ class Peer(object):
         threading.Thread(target=detect_failures, daemon=True).start()
     
     def request_cs(self):
+        print(f"{self.name} REQUESTING CS")
         with self.lock:
             self.state = self.WANTED
             self.timestamp = self.clock
@@ -174,10 +174,12 @@ class Peer(object):
             f.write(f"{self.name} @ {time.time()}\n")
             
         # timeout simulation
-        if self.name == "guilherme": 
-            time.sleep(12)
+        if self.name == "guilherme":
+            for _ in range(12):
+                time.sleep(1)
         else:
-            time.sleep(4)
+            for _ in range(4):
+                time.sleep(1)
 
         if self.cs_timer:
             self.cs_timer.cancel()
@@ -225,7 +227,7 @@ class Peer(object):
 
 def start_nameserver():
     try:
-        Pyro5.nameserver.start_ns_loop(host="localhost")
+        Pyro5.nameserver.start_ns_loop(host="::1")  # IPv6 localhost
     except:
         pass
 
@@ -240,12 +242,14 @@ def print_menu():
 
 def cli_menu(peer):
     print_menu()
+    resource_thread = None
     while True:
         option = input("Select your option: ")
 
         if option == "1":
             peer.request_cs()
-            peer.use_resource()
+            resource_thread = threading.Thread(target=peer.use_resource)
+            resource_thread.start()
         elif option == "2":
             peer.release_cs()
         elif option == "3":
@@ -270,10 +274,10 @@ def main():
         print(f"{name}: nameserver already running")
         time.sleep(1)
 
-    ns = Pyro5.api.locate_ns()
+    ns = Pyro5.api.locate_ns(host="::1")  # IPv6 localhost
 
-    peer = Peer(name)
-    daemon = Pyro5.server.Daemon()
+    peer = Peer(name, ns_host="::1")  # Ensure Peer uses IPv6
+    daemon = Pyro5.server.Daemon(host="::1")  # Daemon on IPv6
     uri = daemon.register(peer)
     ns.register(name, uri)
 
